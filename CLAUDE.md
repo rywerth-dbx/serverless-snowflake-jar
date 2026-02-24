@@ -38,47 +38,50 @@ Snowflake Trial (vggymaj-pnb87710)    Databricks (fevm-ryan-werth-workspace)
 - **Build**: sbt 1.11.7 + sbt-assembly (fat JAR)
 - **Databricks Connect**: `com.databricks:databricks-connect:17.0.+`
 - **Snowflake**: `spark-snowflake_2.13:3.1.5` + `snowflake-jdbc:4.0.1`
-- **Deployment**: Databricks Asset Bundles
+- **Deployment**: Databricks Asset Bundles (DABs)
 - **Compute**: Databricks Serverless (JAR task, Public Preview)
+- **GitHub**: https://github.com/rywerth-dbx/serverless-snowflake-jar
 
 ## How to Run
 
 ### Local (via Databricks Connect)
-
-Credentials are read from Databricks Secrets (scope: `snowflake`) via REST API.
-Falls back to `.env` file if secrets are unavailable.
 
 ```bash
 cd ~/Documents/Databricks/serverless-snowflake-jar
 DATABRICKS_CONFIG_PROFILE=fevm-ryan-werth DATABRICKS_SERVERLESS_COMPUTE_ID=auto sbt run
 ```
 
-### Deploy as Serverless JAR Task
+### Deploy and Run on Serverless
+
+`bundle deploy` builds the fat JAR, uploads it to the UC Volume, and deploys the job definition.
 
 ```bash
-sbt clean assembly
-databricks fs cp target/scala-2.13/serverless-snowflake-jar-assembly-0.1.0-SNAPSHOT.jar \
-  dbfs:/Volumes/ryan_werth_workspace_catalog/default/jars/serverless-snowflake-jar-assembly-0.1.0-SNAPSHOT.jar \
-  --overwrite --profile fevm-ryan-werth
 databricks bundle deploy -t dev --profile fevm-ryan-werth
 databricks bundle run -t dev serverless_snowflake_test --profile fevm-ryan-werth
 ```
 
 ## Key Files
 
-- `src/main/scala/com/demo/ServerlessSnowflakeReader.scala` - single entry point, works locally and deployed
-- `build.sbt` - follows Databricks Connect Scala JAR docs pattern
-- `databricks.yml` + `resources/serverless_snowflake_job.yml` - DAB deployment config
-- `.env` / `.env.example` - local credential fallback
+- `src/main/scala/com/demo/ServerlessSnowflakeReader.scala` — single entry point, works locally and deployed
+- `build.sbt` — Databricks Connect + Snowflake deps, fat JAR assembly config
+- `databricks.yml` — DAB config, artifact build + upload to UC Volume
+- `resources/serverless_snowflake_job.yml` — serverless JAR task job definition
+- `.env` / `.env.example` — local credential fallback (gitignored)
+
+## UC Resources
+
+All resources live in `ryan_werth_workspace_catalog.serverless_snowflake_demo`:
+- **Table**: `snowflake_orders` — output table with filtered Snowflake data
+- **Volume**: `jars` — stores the fat JAR uploaded by `bundle deploy`
 
 ## Credentials
 
-Credentials are managed via **Databricks Secrets** (scope: `snowflake`, keys: `url`, `user`, `password`).
+Managed via **Databricks Secrets** (scope: `snowflake`, keys: `url`, `user`, `password`).
 The code uses `DBUtils.getDBUtils().secrets.get()` which works in both environments:
 - **Locally**: uses the Databricks REST API via your configured profile
 - **On serverless**: proxies to the runtime's native dbutils
 
-Falls back to `.env` file for local development if secrets are unavailable.
+Falls back to `.env` file if secrets are unavailable.
 
 ## Snowflake Account
 
@@ -86,13 +89,19 @@ Falls back to `.env` file for local development if secrets are unavailable.
 - **URL**: https://app.snowflake.com/vggymaj/pnb87710
 - **Expires**: ~2026-03-25
 
+## Permissions
+
+- **Job owner**: ryan.werth@databricks.com
+- **CAN_VIEW**: craig.lukasik@databricks.com
+
 ## Gotchas / Lessons Learned
 
-1. **`{{secrets/scope/key}}` does NOT work in task parameters** — it's only for Spark conf and cluster env vars, neither available on serverless.
+1. **`{{secrets/scope/key}}` does NOT work in task parameters** — only works in Spark conf and cluster env vars, neither available on serverless. Use `dbutils.secrets.get()` in code instead.
 2. **JDBC driver classloader issue on serverless** — set `sfDriver` option to `net.snowflake.client.jdbc.SnowflakeDriver` so the connector explicitly loads the driver via `Class.forName`.
 3. **Serverless JAR tasks are Public Preview** — must be enabled on the workspace.
 4. **Fat JAR exclusions** — exclude `spark-*` JARs from assembly but NOT `spark-snowflake`.
-5. **`DatabricksSession.builder().getOrCreate()`** — same call works locally and on serverless. No detection logic needed.
+5. **`DatabricksSession.builder().getOrCreate()`** — same call works locally and on serverless. No detection logic needed. Env vars (`DATABRICKS_CONFIG_PROFILE`, `DATABRICKS_SERVERLESS_COMPUTE_ID`) control behavior.
+6. **DABs artifact_path uploads to `.internal`** — avoid using `artifact_path` for UC Volumes if you want a clean path. Instead, have the `build` command do both `sbt assembly` and `databricks fs cp`.
 
 ## Relevant Docs
 
@@ -103,3 +112,4 @@ Falls back to `.env` file for local development if secrets are unavailable.
 - [DABs for Scala JARs](https://docs.databricks.com/aws/en/dev-tools/bundles/scala-jar)
 - [Serverless limitations](https://docs.databricks.com/aws/en/compute/serverless/limitations)
 - [Dynamic value references](https://docs.databricks.com/aws/en/jobs/dynamic-value-references)
+- [Databricks Utilities for Scala (dbutils)](https://docs.databricks.com/aws/en/dev-tools/databricks-connect/scala/databricks-utilities)
