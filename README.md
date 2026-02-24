@@ -40,27 +40,9 @@ databricks volumes create <catalog> <schema> jars MANAGED --profile <your-profil
 
 ### 3. Update config for your environment
 
-In `databricks.yml`, update the workspace host and the Volume path in the artifact `build` command:
-
-```yaml
-artifacts:
-  serverless-snowflake-jar:
-    build: "sbt assembly && databricks fs cp target/scala-2.13/serverless-snowflake-jar-assembly-0.1.0-SNAPSHOT.jar dbfs:/Volumes/<catalog>/<schema>/jars/serverless-snowflake-jar.jar --overwrite --profile <your-profile>"
-
-targets:
-  dev:
-    workspace:
-      host: https://<your-workspace>.cloud.databricks.com
-```
-
-In `resources/serverless_snowflake_job.yml`, update the JAR path to match:
-
-```yaml
-java_dependencies:
-  - /Volumes/<catalog>/<schema>/jars/serverless-snowflake-jar.jar
-```
-
 In `ServerlessSnowflakeReader.scala`, update `DefaultUCTable` to your catalog/schema.
+
+For DABs deployment, also update `databricks.yml` (workspace host, Volume path in the build command) and `resources/serverless_snowflake_job.yml` (JAR path in `java_dependencies`).
 
 ## Run locally
 
@@ -72,7 +54,33 @@ This uses Databricks Connect to execute against serverless compute from your mac
 
 ## Deploy and run on Databricks
 
-This project uses [Databricks Asset Bundles (DABs)](https://docs.databricks.com/aws/en/dev-tools/bundles/) to build, upload, and deploy in a single step. DABs is a CLI-driven tool for managing Databricks resources as code — it handles building the JAR, uploading it to the UC Volume, and creating/updating the job definition.
+Two deployment options are provided. Both build the JAR, upload it to a UC Volume, and create a serverless job.
+
+### Option 1: Databricks Python SDK (`deploy.py`)
+
+A Python script that uses the [Databricks SDK](https://docs.databricks.com/aws/en/dev-tools/sdk-python) to programmatically deploy and manage the job. This approach is useful for CI/CD pipelines or teams that prefer scripted deployments.
+
+The SDK deploy creates a scheduled job that runs every Monday at 9:00 AM ET.
+
+```bash
+# Install the SDK (if not already installed)
+pip install databricks-sdk
+
+# Build, upload, and create/update the job
+python deploy.py --profile <your-profile> --catalog <catalog> --schema <schema>
+
+# Build, upload, create/update, and run immediately
+python deploy.py --profile <your-profile> --catalog <catalog> --schema <schema> --run
+
+# Skip the build step (if JAR is already built)
+python deploy.py --profile <your-profile> --catalog <catalog> --schema <schema> --skip-build --run
+```
+
+The script is idempotent — it creates the job on first run and updates it on subsequent runs.
+
+### Option 2: Databricks Asset Bundles (DABs)
+
+[DABs](https://docs.databricks.com/aws/en/dev-tools/bundles/) is a CLI-driven tool for managing Databricks resources as code. It defines jobs, clusters, and other resources in YAML files that live alongside your source code. Running `bundle deploy` builds the JAR, uploads it to the UC Volume, and creates/updates the job definition in a single step.
 
 ```bash
 # Build JAR, upload to UC Volume, and deploy the job
@@ -88,7 +96,6 @@ databricks bundle run -t dev serverless_snowflake_test --profile <your-profile>
 - **`DBUtils.getDBUtils().secrets.get()`** — reads credentials from Databricks Secrets. Works locally (REST API via your profile) and on serverless (native dbutils). No credentials in job config or source code.
 - **`sfDriver` option** — explicitly registers the Snowflake JDBC driver. Required on serverless because the runtime's classloader doesn't auto-discover JDBC drivers from uploaded JARs.
 - **Fat JAR excludes Spark/Databricks classes** — these are provided by the serverless runtime. The Snowflake connector and JDBC driver are included.
-- **DABs-managed deployment** — `bundle deploy` builds the fat JAR via `sbt assembly`, uploads it to a UC Volume, and deploys the job definition. No manual upload step.
 
 ## Gotchas
 
