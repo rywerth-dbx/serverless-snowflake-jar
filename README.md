@@ -102,3 +102,14 @@ databricks bundle run -t dev serverless_snowflake_test --profile <your-profile>
 - `{{secrets/scope/key}}` in task parameters **does not work** — that syntax is only for Spark conf and cluster env vars, neither of which are available on serverless. Use `dbutils.secrets.get()` in code instead.
 - The `assemblyExcludedJars` filter excludes `spark-*` JARs but must **not** exclude `spark-snowflake` — the connector needs to be in the fat JAR.
 - Serverless JAR tasks are **Public Preview** and must be enabled on your workspace.
+
+## Reference docs
+
+- [Databricks Connect](https://docs.databricks.com/aws/en/dev-tools/databricks-connect/)
+- [JARs on Serverless](https://docs.databricks.com/aws/en/jobs/how-to/use-jars-in-workflows)
+- [JAR Task for Jobs](https://docs.databricks.com/aws/en/jobs/jar)
+- [Spark Properties for Serverless](https://docs.databricks.com/aws/en/spark/conf#configure-spark-properties-for-serverless-notebooks-and-jobs)
+- [Databricks Secrets](https://docs.databricks.com/aws/en/security/secrets/)
+- [Unity Catalog Volumes](https://docs.databricks.com/aws/en/volumes/)
+- [Databricks Asset Bundles for Scala JARs](https://docs.databricks.com/aws/en/dev-tools/bundles/scala-jar)
+- [Serverless Limitations](https://docs.databricks.com/aws/en/compute/serverless/limitations)
