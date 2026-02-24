@@ -1,0 +1,18 @@
+bundle:
+  name: serverless-snowflake-jar
+
+include:
+  - resources/*.yml
+
+artifacts:
+  serverless-snowflake-jar:
+    type: jar
+    build: sbt assembly
+    path: .
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://fevm-ryan-werth-workspace.cloud.databricks.com

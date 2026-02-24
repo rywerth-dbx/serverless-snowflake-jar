@@ -1,0 +1,17 @@
+resources:
+  jobs:
+    serverless_snowflake_test:
+      name: "serverless-snowflake-feasibility-test"
+
+      tasks:
+        - task_key: run_snowflake_reader
+          spark_jar_task:
+            main_class_name: com.demo.ServerlessSnowflakeReader
+          environment_key: serverless_scala
+
+      environments:
+        - environment_key: serverless_scala
+          spec:
+            client: "4-scala-preview"
+            java_dependencies:
+              - /Volumes/ryan_werth_workspace_catalog/default/jars/serverless-snowflake-jar-assembly-0.1.0-SNAPSHOT.jar
