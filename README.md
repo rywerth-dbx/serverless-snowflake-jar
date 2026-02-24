@@ -2,7 +2,7 @@
 
 Run a Spark JAR on **Databricks Serverless** that reads from a Snowflake table using the [spark-snowflake connector](https://docs.snowflake.com/en/user-guide/spark-connector) with pushdown predicates and writes results to a Unity Catalog table.
 
-The same code runs locally via Databricks Connect and deployed as a serverless JAR task — no environment detection logic, no code changes between local and production.
+The same code runs locally via [Databricks Connect](https://docs.databricks.com/aws/en/dev-tools/databricks-connect/) and deployed as a serverless JAR task — no environment detection logic, no code changes between local and production.
 
 ## What it does
 
@@ -50,7 +50,7 @@ For DABs deployment, also update `databricks.yml` (workspace host, Volume path i
 DATABRICKS_CONFIG_PROFILE=<your-profile> DATABRICKS_SERVERLESS_COMPUTE_ID=auto sbt run
 ```
 
-This uses Databricks Connect to execute against serverless compute from your machine. Credentials are fetched from Databricks Secrets via the REST API.
+This uses [Databricks Connect](https://docs.databricks.com/aws/en/dev-tools/databricks-connect/) to execute against serverless compute from your machine. Credentials are fetched from Databricks Secrets via the REST API.
 
 ## Deploy and run on Databricks
 
