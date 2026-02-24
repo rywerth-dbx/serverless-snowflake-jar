@@ -38,7 +38,7 @@ Snowflake Trial (vggymaj-pnb87710)    Databricks (fevm-ryan-werth-workspace)
 - **Build**: sbt 1.11.7 + sbt-assembly (fat JAR)
 - **Databricks Connect**: `com.databricks:databricks-connect:17.0.+`
 - **Snowflake**: `spark-snowflake_2.13:3.1.5` + `snowflake-jdbc:4.0.1`
-- **Deployment**: Databricks Asset Bundles (DABs)
+- **Deployment**: Databricks Asset Bundles (DABs) or Python SDK (`deploy.py`)
 - **Compute**: Databricks Serverless (JAR task, Public Preview)
 - **GitHub**: https://github.com/rywerth-dbx/serverless-snowflake-jar
 
@@ -51,9 +51,14 @@ cd ~/Documents/Databricks/serverless-snowflake-jar
 DATABRICKS_CONFIG_PROFILE=fevm-ryan-werth DATABRICKS_SERVERLESS_COMPUTE_ID=auto sbt run
 ```
 
-### Deploy and Run on Serverless
+### Deploy via SDK (with Monday 9am ET schedule)
 
-`bundle deploy` builds the fat JAR, uploads it to the UC Volume, and deploys the job definition.
+```bash
+python deploy.py --profile fevm-ryan-werth \
+  --catalog ryan_werth_workspace_catalog --schema serverless_snowflake_demo --run
+```
+
+### Deploy via DABs (on-demand)
 
 ```bash
 databricks bundle deploy -t dev --profile fevm-ryan-werth
@@ -64,8 +69,9 @@ databricks bundle run -t dev serverless_snowflake_test --profile fevm-ryan-werth
 
 - `src/main/scala/com/demo/ServerlessSnowflakeReader.scala` — single entry point, works locally and deployed
 - `build.sbt` — Databricks Connect + Snowflake deps, fat JAR assembly config
+- `deploy.py` — Python SDK deploy script (build, upload, create/update job with schedule)
 - `databricks.yml` — DAB config, artifact build + upload to UC Volume
-- `resources/serverless_snowflake_job.yml` — serverless JAR task job definition
+- `resources/serverless_snowflake_job.yml` — serverless JAR task job definition (DABs)
 - `.env` / `.env.example` — local credential fallback (gitignored)
 
 ## UC Resources
@@ -89,9 +95,15 @@ Falls back to `.env` file if secrets are unavailable.
 - **URL**: https://app.snowflake.com/vggymaj/pnb87710
 - **Expires**: ~2026-03-25
 
+## Jobs on Workspace
+
+- **`serverless-snowflake-feasibility-test`** (ID: 787878969797628) — DABs-managed, on-demand
+- **`serverless-snowflake-sdk-deploy`** (ID: 274667541633519) — SDK-managed, scheduled Monday 9am ET
+
 ## Permissions
 
-- **Job owner**: ryan.werth@databricks.com
+Both jobs:
+- **Owner**: ryan.werth@databricks.com
 - **CAN_VIEW**: craig.lukasik@databricks.com
 
 ## Gotchas / Lessons Learned
