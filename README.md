@@ -32,26 +32,29 @@ databricks secrets put-secret snowflake password --string-value "<password>" --p
 
 ### 2. Create a UC Volume for the JAR
 
+The deploy step uploads the fat JAR to a [Unity Catalog Volume](https://docs.databricks.com/aws/en/volumes/). Create one if you don't already have one:
+
 ```bash
 databricks volumes create <catalog>.<schema>.jars --volume-type MANAGED --profile <your-profile>
 ```
 
 ### 3. Update config for your environment
 
-In `databricks.yml`, set your workspace host:
+In `databricks.yml`, set your workspace host and the Volume path for artifact uploads:
 
 ```yaml
 targets:
   dev:
     workspace:
       host: https://<your-workspace>.cloud.databricks.com
+      artifact_path: /Volumes/<catalog>/<schema>/jars
 ```
 
-In `resources/serverless_snowflake_job.yml`, update the JAR path and (optionally) the target UC table:
+In `resources/serverless_snowflake_job.yml`, update the JAR path to match (DABs uploads to a `.internal` subdirectory within the Volume):
 
 ```yaml
 java_dependencies:
-  - /Volumes/<catalog>/<schema>/jars/serverless-snowflake-jar-assembly-0.1.0-SNAPSHOT.jar
+  - /Volumes/<catalog>/<schema>/jars/.internal/serverless-snowflake-jar-assembly-0.1.0-SNAPSHOT.jar
 ```
 
 In `ServerlessSnowflakeReader.scala`, update `DefaultUCTable` to your catalog/schema.
@@ -66,17 +69,13 @@ This uses Databricks Connect to execute against serverless compute from your mac
 
 ## Deploy and run on Databricks
 
+This project uses [Databricks Asset Bundles (DABs)](https://docs.databricks.com/aws/en/dev-tools/bundles/) to build, upload, and deploy in a single step. DABs is a CLI-driven tool for managing Databricks resources as code — it handles building the JAR, uploading it to the UC Volume, and creating/updating the job definition.
+
 ```bash
-# Build fat JAR
-sbt clean assembly
-
-# Upload to UC Volume
-databricks fs cp target/scala-2.13/serverless-snowflake-jar-assembly-0.1.0-SNAPSHOT.jar \
-  "/Volumes/<catalog>/<schema>/jars/serverless-snowflake-jar-assembly-0.1.0-SNAPSHOT.jar" \
-  --overwrite --profile <your-profile>
-
-# Deploy and run
+# Build JAR, upload to UC Volume, and deploy the job
 databricks bundle deploy -t dev --profile <your-profile>
+
+# Run the job
 databricks bundle run -t dev serverless_snowflake_test --profile <your-profile>
 ```
 
@@ -86,9 +85,11 @@ databricks bundle run -t dev serverless_snowflake_test --profile <your-profile>
 - **`DBUtils.getDBUtils().secrets.get()`** — reads credentials from Databricks Secrets. Works locally (REST API via your profile) and on serverless (native dbutils). No credentials in job config or source code.
 - **`sfDriver` option** — explicitly registers the Snowflake JDBC driver. Required on serverless because the runtime's classloader doesn't auto-discover JDBC drivers from uploaded JARs.
 - **Fat JAR excludes Spark/Databricks classes** — these are provided by the serverless runtime. The Snowflake connector and JDBC driver are included.
+- **DABs-managed deployment** — `bundle deploy` builds the fat JAR via `sbt assembly`, uploads it to a UC Volume, and deploys the job definition. No manual upload step.
 
 ## Gotchas
 
 - `{{secrets/scope/key}}` in task parameters **does not work** — that syntax is only for Spark conf and cluster env vars, neither of which are available on serverless. Use `dbutils.secrets.get()` in code instead.
 - The `assemblyExcludedJars` filter excludes `spark-*` JARs but must **not** exclude `spark-snowflake` — the connector needs to be in the fat JAR.
 - Serverless JAR tasks are **Public Preview** and must be enabled on your workspace.
+- DABs uploads artifacts to a `.internal` subdirectory within the configured `artifact_path`. The `java_dependencies` path must include this.
