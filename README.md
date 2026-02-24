@@ -72,7 +72,7 @@ sbt clean assembly
 
 # Upload to UC Volume
 databricks fs cp target/scala-2.13/serverless-snowflake-jar-assembly-0.1.0-SNAPSHOT.jar \
-  dbfs:/Volumes/<catalog>/<schema>/jars/serverless-snowflake-jar-assembly-0.1.0-SNAPSHOT.jar \
+  "/Volumes/<catalog>/<schema>/jars/serverless-snowflake-jar-assembly-0.1.0-SNAPSHOT.jar" \
   --overwrite --profile <your-profile>
 
 # Deploy and run
