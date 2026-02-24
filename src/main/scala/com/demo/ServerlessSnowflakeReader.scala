@@ -21,7 +21,7 @@ object ServerlessSnowflakeReader {
 
   val SnowflakeFormat = "net.snowflake.spark.snowflake"
   val SecretScope = "snowflake"
-  val DefaultUCTable = "ryan_werth_workspace_catalog.default.snowflake_orders_serverless"
+  val DefaultUCTable = "ryan_werth_workspace_catalog.serverless_snowflake_demo.snowflake_orders"
 
   private def loadDotEnv(): Map[String, String] = {
     val file = new java.io.File(".env")

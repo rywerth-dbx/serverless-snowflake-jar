@@ -14,4 +14,4 @@ resources:
           spec:
             client: "4-scala-preview"
             java_dependencies:
-              - /Volumes/ryan_werth_workspace_catalog/default/jars/.internal/serverless-snowflake-jar-assembly-0.1.0-SNAPSHOT.jar
+              - /Volumes/ryan_werth_workspace_catalog/serverless_snowflake_demo/jars/serverless-snowflake-jar.jar

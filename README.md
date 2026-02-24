@@ -35,26 +35,29 @@ databricks secrets put-secret snowflake password --string-value "<password>" --p
 The deploy step uploads the fat JAR to a [Unity Catalog Volume](https://docs.databricks.com/aws/en/volumes/). Create one if you don't already have one:
 
 ```bash
-databricks volumes create <catalog>.<schema>.jars --volume-type MANAGED --profile <your-profile>
+databricks volumes create <catalog> <schema> jars MANAGED --profile <your-profile>
 ```
 
 ### 3. Update config for your environment
 
-In `databricks.yml`, set your workspace host and the Volume path for artifact uploads:
+In `databricks.yml`, update the workspace host and the Volume path in the artifact `build` command:
 
 ```yaml
+artifacts:
+  serverless-snowflake-jar:
+    build: "sbt assembly && databricks fs cp target/scala-2.13/serverless-snowflake-jar-assembly-0.1.0-SNAPSHOT.jar dbfs:/Volumes/<catalog>/<schema>/jars/serverless-snowflake-jar.jar --overwrite --profile <your-profile>"
+
 targets:
   dev:
     workspace:
       host: https://<your-workspace>.cloud.databricks.com
-      artifact_path: /Volumes/<catalog>/<schema>/jars
 ```
 
-In `resources/serverless_snowflake_job.yml`, update the JAR path to match (DABs uploads to a `.internal` subdirectory within the Volume):
+In `resources/serverless_snowflake_job.yml`, update the JAR path to match:
 
 ```yaml
 java_dependencies:
-  - /Volumes/<catalog>/<schema>/jars/.internal/serverless-snowflake-jar-assembly-0.1.0-SNAPSHOT.jar
+  - /Volumes/<catalog>/<schema>/jars/serverless-snowflake-jar.jar
 ```
 
 In `ServerlessSnowflakeReader.scala`, update `DefaultUCTable` to your catalog/schema.
@@ -92,4 +95,3 @@ databricks bundle run -t dev serverless_snowflake_test --profile <your-profile>
 - `{{secrets/scope/key}}` in task parameters **does not work** — that syntax is only for Spark conf and cluster env vars, neither of which are available on serverless. Use `dbutils.secrets.get()` in code instead.
 - The `assemblyExcludedJars` filter excludes `spark-*` JARs but must **not** exclude `spark-snowflake` — the connector needs to be in the fat JAR.
 - Serverless JAR tasks are **Public Preview** and must be enabled on your workspace.
-- DABs uploads artifacts to a `.internal` subdirectory within the configured `artifact_path`. The `java_dependencies` path must include this.

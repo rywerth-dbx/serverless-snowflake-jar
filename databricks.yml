@@ -7,7 +7,7 @@ include:
 artifacts:
   serverless-snowflake-jar:
     type: jar
-    build: sbt assembly
+    build: "sbt assembly && databricks fs cp target/scala-2.13/serverless-snowflake-jar-assembly-0.1.0-SNAPSHOT.jar dbfs:/Volumes/ryan_werth_workspace_catalog/serverless_snowflake_demo/jars/serverless-snowflake-jar.jar --overwrite --profile fevm-ryan-werth"
     path: .
     files:
       - source: ./target/scala-2.13/serverless-snowflake-jar-assembly-0.1.0-SNAPSHOT.jar
@@ -18,4 +18,3 @@ targets:
     default: true
     workspace:
       host: https://fevm-ryan-werth-workspace.cloud.databricks.com
-      artifact_path: /Volumes/ryan_werth_workspace_catalog/default/jars
