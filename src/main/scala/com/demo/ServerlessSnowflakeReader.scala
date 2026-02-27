@@ -96,6 +96,7 @@ object ServerlessSnowflakeReader {
 
   val SnowflakeFormat = "net.snowflake.spark.snowflake"
   val SecretScope = "snowflake"
+  /** Default UC table (catalog.schema.table). Override via env UC_TABLE or first program argument. */
   val DefaultUCTable = "ryan_werth_workspace_catalog.serverless_snowflake_demo.snowflake_orders"
 
   private def loadDotEnv(): Map[String, String] = {
@@ -118,6 +119,11 @@ object ServerlessSnowflakeReader {
     }
   }
 
+  private val DefaultWarehouse = "COMPUTE_WH"
+
+  private def normalizeWarehouse(wh: String): String =
+    if (wh == null || wh.trim.isEmpty) DefaultWarehouse else wh.trim
+
   private def getCredentials(): (String, String, String, String) = {
     // Try Databricks Secrets first (works locally via REST API and on serverless via native dbutils)
     val fromSecrets = Try {
@@ -125,7 +131,9 @@ object ServerlessSnowflakeReader {
       val url = dbutils.secrets.get(scope = SecretScope, key = "url")
       val user = dbutils.secrets.get(scope = SecretScope, key = "user")
       val password = dbutils.secrets.get(scope = SecretScope, key = "password")
-      (url, user, password, "COMPUTE_WH")
+      val warehouse = normalizeWarehouse(
+        Try(dbutils.secrets.get(scope = SecretScope, key = "warehouse")).getOrElse(DefaultWarehouse))
+      (url, user, password, warehouse)
     }
 
     fromSecrets.getOrElse {
@@ -134,16 +142,20 @@ object ServerlessSnowflakeReader {
       (env.getOrElse("SNOWFLAKE_URL", ""),
        env.getOrElse("SNOWFLAKE_USER", ""),
        env.getOrElse("SNOWFLAKE_PASSWORD", ""),
-       env.getOrElse("SNOWFLAKE_WAREHOUSE", "COMPUTE_WH"))
+       normalizeWarehouse(env.getOrElse("SNOWFLAKE_WAREHOUSE", DefaultWarehouse)))
     }
   }
 
   def main(args: Array[String]): Unit = {
     val (sfURL, sfUser, sfPassword, sfWarehouse) = getCredentials()
-    val ucTable = if (args.nonEmpty) args(0) else DefaultUCTable
+    // Target UC table: env UC_TABLE > first argument > default (create schema in your workspace if using default)
+    val ucTable = sys.env.get("UC_TABLE").filter(_.trim.nonEmpty)
+      .orElse(if (args.nonEmpty) Some(args(0)) else None)
+      .getOrElse(DefaultUCTable)
 
     require(sfURL.nonEmpty && sfUser.nonEmpty && sfPassword.nonEmpty,
-      "No credentials found. Set up Databricks Secrets (scope: snowflake, keys: url/user/password) or create a .env file (see .env.example)")
+      "No credentials found. Set up Databricks Secrets (scope: snowflake, keys: url/user/password/warehouse) or create a .env file (see .env.example)")
+    val warehouse = normalizeWarehouse(sfWarehouse)
 
     val spark: SparkSession = DatabricksSession.builder().getOrCreate()
 
@@ -154,7 +166,7 @@ object ServerlessSnowflakeReader {
         "sfPassword"  -> sfPassword,
         "sfDatabase"  -> "SNOWFLAKE_SAMPLE_DATA",
         "sfSchema"    -> "TPCH_SF1000",
-        "sfWarehouse" -> sfWarehouse,
+        "sfWarehouse" -> warehouse,
         "sfDriver"    -> "net.snowflake.client.jdbc.SnowflakeDriver"
       )
 
@@ -162,6 +174,7 @@ object ServerlessSnowflakeReader {
       println("Serverless Snowflake Feasibility Test")
       println("=" * 60)
       println(s"Snowflake URL:   $sfURL")
+      println(s"Snowflake warehouse: $warehouse")
       println(s"Source table:    SNOWFLAKE_SAMPLE_DATA.TPCH_SF1000.ORDERS")
       println(s"Connector:       $SnowflakeFormat")
       println(s"Target UC table: $ucTable")

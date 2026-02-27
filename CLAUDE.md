@@ -83,7 +83,7 @@ All resources live in `ryan_werth_workspace_catalog.serverless_snowflake_demo`:
 
 ## Credentials
 
-Managed via **Databricks Secrets** (scope: `snowflake`, keys: `url`, `user`, `password`).
+Managed via **Databricks Secrets** (scope: `snowflake`, keys: `url`, `user`, `password`, and optionally `warehouse`).
 The code uses `DBUtils.getDBUtils().secrets.get()` which works in both environments:
 - **Locally**: uses the Databricks REST API via your configured profile
 - **On serverless**: proxies to the runtime's native dbutils
