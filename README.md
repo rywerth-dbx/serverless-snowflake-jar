@@ -10,6 +10,7 @@ The same code runs locally via [Databricks Connect](https://docs.databricks.com/
 2. Connects to Snowflake using the spark-snowflake connector
 3. Reads from `SNOWFLAKE_SAMPLE_DATA.TPCH_SF1000.ORDERS` (~1.5B rows) with a date range pushdown predicate
 4. Writes the filtered results to a Unity Catalog table
+5. Runs an HLL (HyperLogLog) distinct count demo comparing [Apache DataSketches](https://datasketches.apache.org/), Spark's built-in `approx_count_distinct`, and exact count
 
 ## Prerequisites
 
@@ -96,12 +97,14 @@ databricks bundle run -t dev serverless_snowflake_test --profile <your-profile>
 - **`DBUtils.getDBUtils().secrets.get()`** — reads credentials from Databricks Secrets. Works locally (REST API via your profile) and on serverless (native dbutils). No credentials in job config or source code.
 - **`sfDriver` option** — explicitly registers the Snowflake JDBC driver. Required on serverless because the runtime's classloader doesn't auto-discover JDBC drivers from uploaded JARs.
 - **Fat JAR excludes Spark/Databricks classes** — these are provided by the serverless runtime. The Snowflake connector and JDBC driver are included.
+- **Apache DataSketches for HLL** — vendor-neutral HyperLogLog library that works on any Spark environment (EKS, Databricks, standalone). Included as a cross-environment alternative to Databricks-specific `hll_sketch_agg()` or the unmaintained spark-alchemy library.
 
 ## Gotchas
 
 - `{{secrets/scope/key}}` in task parameters **does not work** — that syntax is only for Spark conf and cluster env vars, neither of which are available on serverless. Use `dbutils.secrets.get()` in code instead.
 - The `assemblyExcludedJars` filter excludes `spark-*` JARs but must **not** exclude `spark-snowflake` — the connector needs to be in the fat JAR.
 - Serverless JAR tasks are **Public Preview** and must be enabled on your workspace.
+- **Custom UDAFs are blocked on serverless** — Unity Catalog shared access mode does not allow user-defined aggregate functions. This means libraries like DataSketches or spark-alchemy that rely on custom Spark `Aggregator` classes won't work on serverless. Use Databricks built-in functions (`hll_sketch_agg`, `approx_count_distinct`) on serverless, or DataSketches on standard Spark / EKS.
 
 ## Reference docs
 

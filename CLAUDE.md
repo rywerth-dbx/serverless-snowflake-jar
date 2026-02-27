@@ -38,6 +38,7 @@ Snowflake Trial (vggymaj-pnb87710)    Databricks (fevm-ryan-werth-workspace)
 - **Build**: sbt 1.11.7 + sbt-assembly (fat JAR)
 - **Databricks Connect**: `com.databricks:databricks-connect:17.0.+`
 - **Snowflake**: `spark-snowflake_2.13:3.1.5` + `snowflake-jdbc:4.0.1`
+- **HLL**: Apache DataSketches `datasketches-java:6.1.1` (cross-environment HLL)
 - **Deployment**: Databricks Asset Bundles (DABs) or Python SDK (`deploy.py`)
 - **Compute**: Databricks Serverless (JAR task, Public Preview)
 - **GitHub**: https://github.com/rywerth-dbx/serverless-snowflake-jar
@@ -114,6 +115,7 @@ Both jobs:
 4. **Fat JAR exclusions** — exclude `spark-*` JARs from assembly but NOT `spark-snowflake`.
 5. **`DatabricksSession.builder().getOrCreate()`** — same call works locally and on serverless. No detection logic needed. Env vars (`DATABRICKS_CONFIG_PROFILE`, `DATABRICKS_SERVERLESS_COMPUTE_ID`) control behavior.
 6. **DABs artifact_path uploads to `.internal`** — avoid using `artifact_path` for UC Volumes if you want a clean path. Instead, have the `build` command do both `sbt assembly` and `databricks fs cp`.
+7. **Custom UDAFs blocked on serverless** — UC shared access mode does not allow user-defined aggregate functions (`Aggregator`-based UDAFs). This blocks DataSketches HLL and spark-alchemy on serverless. Use Databricks built-in `hll_sketch_agg()` or `approx_count_distinct()` on serverless. DataSketches works on standard Spark / EKS.
 
 ## Relevant Docs
 

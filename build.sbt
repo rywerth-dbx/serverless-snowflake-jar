@@ -8,6 +8,9 @@ libraryDependencies += "com.databricks" %% "databricks-connect" % "17.0.+"
 libraryDependencies += "net.snowflake" % "spark-snowflake_2.13" % "3.1.5"
 libraryDependencies += "net.snowflake" % "snowflake-jdbc" % "4.0.1"
 
+// Apache DataSketches - vendor-neutral HLL (works on EKS Spark and Databricks)
+libraryDependencies += "org.apache.datasketches" % "datasketches-java" % "6.1.1"
+
 javacOptions ++= Seq("-source", "17", "-target", "17")
 scalacOptions ++= Seq("-release", "17")
 
