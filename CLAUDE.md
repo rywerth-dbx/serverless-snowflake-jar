@@ -115,7 +115,7 @@ Both jobs:
 4. **Fat JAR exclusions** — exclude `spark-*` JARs from assembly but NOT `spark-snowflake`.
 5. **`DatabricksSession.builder().getOrCreate()`** — same call works locally and on serverless. No detection logic needed. Env vars (`DATABRICKS_CONFIG_PROFILE`, `DATABRICKS_SERVERLESS_COMPUTE_ID`) control behavior.
 6. **DABs artifact_path uploads to `.internal`** — avoid using `artifact_path` for UC Volumes if you want a clean path. Instead, have the `build` command do both `sbt assembly` and `databricks fs cp`.
-7. **Custom UDAFs blocked on serverless** — UC shared access mode does not allow user-defined aggregate functions (`Aggregator`-based UDAFs). This blocks DataSketches HLL and spark-alchemy on serverless. Use Databricks built-in `hll_sketch_agg()` or `approx_count_distinct()` on serverless. DataSketches works on standard Spark / EKS.
+7. **Custom UDAFs and HLL blocked on serverless** — UC shared access mode does not allow user-defined aggregate functions (`Aggregator`-based UDAFs) or Databricks built-in `hll_sketch_agg()`. This blocks DataSketches HLL, spark-alchemy, and `hll_sketch_agg` on serverless. Only standard Spark aggregates like `approx_count_distinct()` work. The demo's `hllDistinctCount()` uses a 3-tier fallback: `hll_sketch_agg` → DataSketches UDAF → `approx_count_distinct`. On EKS/standard Spark, DataSketches UDAF succeeds. On Databricks single-user mode, `hll_sketch_agg` succeeds. On serverless shared access mode, `approx_count_distinct` is the fallback.
 
 ## Relevant Docs
 

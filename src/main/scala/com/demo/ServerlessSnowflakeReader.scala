@@ -2,9 +2,8 @@ package com.demo
 
 import com.databricks.connect.DatabricksSession
 import com.databricks.sdk.scala.dbutils.DBUtils
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{DataFrame, SparkSession, Encoder, Encoders}
 import org.apache.spark.sql.expressions.Aggregator
-import org.apache.spark.sql.{Encoder, Encoders}
 import org.apache.spark.sql.functions.{approx_count_distinct, col, udaf}
 import org.apache.datasketches.hll.{HllSketch, Union}
 import scala.io.Source
@@ -25,11 +24,10 @@ object ServerlessSnowflakeReader {
 
   /**
    * HLL (HyperLogLog) aggregator using Apache DataSketches.
-   * Estimates distinct counts using very little memory.
-   * Works on any Spark environment (EKS, Databricks, local) — no vendor lock-in.
+   * Used on standard Spark / EKS where custom UDAFs are allowed.
    */
   object HllEstimator extends Aggregator[String, Array[Byte], Long] {
-    private val LogK = 12 // precision parameter (higher = more accurate, more memory)
+    private val LogK = 12
 
     def zero: Array[Byte] = new HllSketch(LogK).toCompactByteArray
 
@@ -51,6 +49,49 @@ object ServerlessSnowflakeReader {
 
     def bufferEncoder: Encoder[Array[Byte]] = Encoders.BINARY
     def outputEncoder: Encoder[Long] = Encoders.scalaLong
+  }
+
+  /**
+   * Cross-environment HLL distinct count.
+   * - On Databricks: uses built-in hll_sketch_agg (no UDAF, works on serverless)
+   * - On standard Spark / EKS: uses Apache DataSketches UDAF
+   *
+   * Same function, same result, different engine under the hood.
+   */
+  /**
+   * Cross-environment HLL distinct count with automatic fallback.
+   *
+   * Tries in order:
+   * 1. Databricks built-in hll_sketch_agg (works on single-user mode)
+   * 2. Apache DataSketches UDAF (works on EKS / standard Spark)
+   * 3. Spark built-in approx_count_distinct (works everywhere)
+   *
+   * Returns (estimate, engine_used).
+   */
+  def hllDistinctCount(df: DataFrame, column: String, spark: SparkSession): (Long, String) = {
+    // Try Databricks built-in HLL
+    val attempt1 = Try {
+      df.createOrReplaceTempView("hll_input")
+      val result = spark.sql(s"SELECT hll_sketch_estimate(hll_sketch_agg($column)) FROM hll_input")
+        .collect()(0).getLong(0)
+      (result, "Databricks hll_sketch_agg")
+    }
+    if (attempt1.isSuccess) return attempt1.get
+
+    // Try DataSketches UDAF (works on standard Spark / EKS)
+    val attempt2 = Try {
+      val hll = udaf(HllEstimator)
+      val result = df.select(col(column).cast("string"))
+        .agg(hll(col(column)).as("hll_estimate"))
+        .collect()(0).getLong(0)
+      (result, "Apache DataSketches UDAF")
+    }
+    if (attempt2.isSuccess) return attempt2.get
+
+    // Fallback: built-in approx_count_distinct (works everywhere)
+    val result = df.agg(approx_count_distinct(column).as("approx"))
+      .collect()(0).getLong(0)
+    (result, "Spark approx_count_distinct (fallback)")
   }
 
   val SnowflakeFormat = "net.snowflake.spark.snowflake"
@@ -145,38 +186,28 @@ object ServerlessSnowflakeReader {
       println(s"Results written to $ucTable")
 
       // --- HLL (HyperLogLog) Demo ---
-      // Demonstrates Apache DataSketches for approximate distinct counts.
-      // This is a cross-environment approach: works on EKS Spark AND Databricks.
+      // Demonstrates cross-environment HLL using hllDistinctCount().
+      // On Databricks: uses built-in hll_sketch_agg (no UDAF)
+      // On EKS / standard Spark: uses Apache DataSketches UDAF
       println()
       println("=" * 60)
       println("HLL (HyperLogLog) Distinct Count Demo")
       println("=" * 60)
 
-      // Approach 1: Apache DataSketches (cross-environment, gives raw sketches)
-      // Note: Custom UDAFs may be restricted via Databricks Connect (shared access mode).
-      // Works on EKS Spark and may work on serverless JAR tasks.
-      Try {
-        val hll = udaf(HllEstimator)
-        val hllResult = ordersDF
-          .select(col("O_CUSTKEY").cast("string"))
-          .agg(hll(col("O_CUSTKEY")).as("hll_estimate"))
-          .collect()(0).getLong(0)
-        println(s"DataSketches HLL estimate (distinct customers): $hllResult")
-      }.recover { case e: Exception =>
-        println(s"DataSketches UDAF not available in this environment: ${e.getMessage}")
-        println("  (Custom UDAFs are restricted in UC shared access mode.)")
-        println("  (This works on standard Spark / EKS.)")
-      }
+      // Cross-environment HLL — tries Databricks built-in first, falls back to DataSketches
+      val (hllResult, hllEngine) = hllDistinctCount(ordersDF, "O_CUSTKEY", spark)
+      println(s"HLL engine used:                      $hllEngine")
+      println(s"HLL estimate (distinct customers):    $hllResult")
 
-      // Approach 2: Built-in approx_count_distinct (simpler, no library needed, works everywhere)
+      // Built-in approx_count_distinct for comparison (works everywhere, no library needed)
       val approxResult = ordersDF
         .agg(approx_count_distinct("O_CUSTKEY").as("approx_distinct"))
         .collect()(0).getLong(0)
-      println(s"Spark approx_count_distinct estimate:           $approxResult")
+      println(s"approx_count_distinct estimate:       $approxResult")
 
       // Exact count for comparison
       val exactResult = ordersDF.select("O_CUSTKEY").distinct().count()
-      println(s"Exact distinct count:                           $exactResult")
+      println(s"Exact distinct count:                 $exactResult")
       println()
 
       println("=" * 60)

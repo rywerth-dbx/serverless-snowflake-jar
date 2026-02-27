@@ -104,7 +104,7 @@ databricks bundle run -t dev serverless_snowflake_test --profile <your-profile>
 - `{{secrets/scope/key}}` in task parameters **does not work** — that syntax is only for Spark conf and cluster env vars, neither of which are available on serverless. Use `dbutils.secrets.get()` in code instead.
 - The `assemblyExcludedJars` filter excludes `spark-*` JARs but must **not** exclude `spark-snowflake` — the connector needs to be in the fat JAR.
 - Serverless JAR tasks are **Public Preview** and must be enabled on your workspace.
-- **Custom UDAFs are blocked on serverless** — Unity Catalog shared access mode does not allow user-defined aggregate functions. This means libraries like DataSketches or spark-alchemy that rely on custom Spark `Aggregator` classes won't work on serverless. Use Databricks built-in functions (`hll_sketch_agg`, `approx_count_distinct`) on serverless, or DataSketches on standard Spark / EKS.
+- **Custom UDAFs and HLL functions are blocked on serverless** — Unity Catalog shared access mode does not allow user-defined aggregate functions or Databricks built-in `hll_sketch_agg()`. Libraries like DataSketches or spark-alchemy that rely on custom Spark `Aggregator` classes won't work, and even `hll_sketch_agg` is treated as a user-defined aggregator by UC security. Only standard Spark aggregates like `approx_count_distinct()` work on serverless. The demo's `hllDistinctCount()` uses a 3-tier fallback chain that picks the best available engine for the current environment.
 
 ## Reference docs
 
